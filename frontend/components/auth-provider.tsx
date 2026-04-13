@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { setAuth, removeAuth } from '@/lib/auth';
 
@@ -12,18 +12,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Sync our local state for instant rendering patches
+        // Block unverified users — sign them out and send to login
+        if (!user.emailVerified) {
+          await signOut(auth);
+          removeAuth();
+          if (pathname !== '/login') {
+            router.push('/login');
+          }
+          setLoading(false);
+          return;
+        }
+
+        // Verified user — sync local state
         setAuth();
-        // Redirect away from login if authenticated
         if (pathname === '/login') {
           router.push('/');
         }
       } else {
-        // Sync our local state
+        // No user — clear auth and redirect to login
         removeAuth();
-        // Redirect to login if on a protected route
         if (pathname !== '/login') {
           router.push('/login');
         }
@@ -34,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [pathname, router]);
 
-  // Optionally show a loading state while Firebase checks auth
+  // Show loading state while Firebase checks auth
   if (loading) {
     return (
       <div className="grid h-screen w-screen place-items-center bg-[#F5F7FB] dark:bg-[#141318]">

@@ -6,7 +6,7 @@ import { Manrope } from 'next/font/google';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import { ArrowRight, BarChart3, Eye, EyeOff, Moon, Sun } from 'lucide-react';
 
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
 import {
@@ -261,8 +261,17 @@ function LoginForm({
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Redirection is now handled purely by AuthProvider!
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+      // Block login if email is not verified
+      if (!userCredential.user.emailVerified) {
+        await signOut(auth);
+        setError('Please verify your email before logging in. Check your inbox for the verification link.');
+        setLoading(false);
+        return;
+      }
+
+      // Redirection is handled by AuthProvider
     } catch (err: any) {
       console.error(err);
       setError('Invalid email or password.');
@@ -334,6 +343,7 @@ function SignupForm({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -368,12 +378,27 @@ function SignupForm({
     setLoading(true);
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       localStorage.setItem('user_name', name);
-      // Redirection is handled purely by AuthProvider!
+
+      // Send verification email
+      await sendEmailVerification(userCredential.user);
+
+      // Sign out immediately so unverified user can't access the app
+      await signOut(auth);
+
+      setSuccess('Account created! Check your email for a verification link, then log in.');
+      setLoading(false);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to create account.');
+      const code = err?.code || '';
+      if (code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else {
+        setError(err.message || 'Failed to create account.');
+      }
       setLoading(false);
     }
   };
@@ -436,6 +461,7 @@ function SignupForm({
       </div>
 
       {error ? <p className="mt-4 text-sm font-medium text-[#B45376]">{error}</p> : null}
+      {success ? <p className="mt-4 text-sm font-medium text-[#2D8659]">{success}</p> : null}
 
       <div className="mt-6">
         <SubmitButton accent={accent} loading={loading} label="Create account" loadingLabel="Creating account" />
