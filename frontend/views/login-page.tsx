@@ -29,13 +29,53 @@ const transition = {
   ease: [0.22, 1, 0.36, 1] as const,
 };
 
-function getEmailActionSettings() {
+function normalizeContinueUrl(value: string) {
+  try {
+    return new URL(value).toString();
+  } catch {
+    return null;
+  }
+}
+
+function getLoopbackContinueUrl() {
   if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const currentUrl = new URL(window.location.href);
+  const isLoopbackHost =
+    currentUrl.hostname === 'localhost' ||
+    currentUrl.hostname === '127.0.0.1' ||
+    currentUrl.hostname === '[::1]' ||
+    currentUrl.hostname === '::1';
+
+  if (!isLoopbackHost) {
+    return null;
+  }
+
+  if (currentUrl.hostname !== 'localhost') {
+    currentUrl.hostname = 'localhost';
+  }
+
+  currentUrl.pathname = '/login';
+  currentUrl.search = '';
+  currentUrl.hash = '';
+
+  return currentUrl.toString();
+}
+
+function getEmailActionSettings() {
+  const configuredContinueUrl = process.env.NEXT_PUBLIC_FIREBASE_AUTH_CONTINUE_URL?.trim();
+  const continueUrl =
+    (configuredContinueUrl ? normalizeContinueUrl(configuredContinueUrl) : null) ??
+    getLoopbackContinueUrl();
+
+  if (!continueUrl) {
     return undefined;
   }
 
   return {
-    url: `${window.location.origin}/login`,
+    url: continueUrl,
     handleCodeInApp: false,
   };
 }
@@ -58,6 +98,8 @@ function getFirebaseAuthErrorMessage(error: unknown) {
     case 'auth/app-deleted':
     case 'auth/configuration-not-found':
       return 'Firebase configuration looks incomplete. Please check the frontend environment variables.';
+    case 'auth/unauthorized-continue-uri':
+      return 'Firebase blocked the email link redirect URL. Set NEXT_PUBLIC_FIREBASE_AUTH_CONTINUE_URL to an authorized /login URL or add that domain in Firebase Authentication.';
     default:
       if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
         return error.message;
@@ -477,19 +519,12 @@ function SignupForm({
 
     setLoading(true);
 
+    let userCredential;
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      userCredential = await createUserWithEmailAndPassword(auth, email, password);
       localStorage.setItem('user_name', name);
       localStorage.setItem('user_email', userCredential.user.email ?? email);
-
-      // Send verification email
-      await sendEmailVerification(userCredential.user, getEmailActionSettings());
-
-      // Sign out immediately so unverified user can't access the app
-      await signOut(auth);
-
-      setSuccess('Account created. We sent a verification email just now. If you do not see it, try logging in and use "Resend verification email".');
-      setLoading(false);
     } catch (err: unknown) {
       console.error(err);
       const code = typeof err === 'object' && err && 'code' in err ? String(err.code) : '';
@@ -498,6 +533,19 @@ function SignupForm({
       } else {
         setError(getFirebaseAuthErrorMessage(err));
       }
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await sendEmailVerification(userCredential.user, getEmailActionSettings());
+      setSuccess('Account created. We sent a verification email just now. If you do not see it, try logging in and use "Resend verification email".');
+    } catch (err: unknown) {
+      console.error(err);
+      setSuccess('Account created, but the verification email could not be sent automatically. Try logging in and use "Resend verification email" after updating the Firebase continue URL settings.');
+      setError(getFirebaseAuthErrorMessage(err));
+    } finally {
+      await signOut(auth);
       setLoading(false);
     }
   };
