@@ -1,13 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useSyncExternalStore } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import {
-  subscribeToAuth,
-  getAuthSnapshot,
-  getAuthServerSnapshot,
-} from '@/lib/auth';
 import { useAppStore } from '@/lib/app-store';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { TopNavbar } from '@/components/dashboard/top-navbar';
@@ -16,8 +10,6 @@ import { UploadPage } from '@/components/dashboard/pages/upload-page';
 import { InsightsPage } from '@/components/dashboard/pages/insights-page';
 import { VisualizationsPage } from '@/components/dashboard/pages/visualizations-page';
 import { SettingsPage } from '@/components/dashboard/pages/settings-page';
-
-const subscribeToHydration = () => () => {};
 
 const pageTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -35,59 +27,29 @@ const pageDescriptions: Record<string, string> = {
   settings: 'Preferences',
 };
 
-// ── ProtectedRoute Wrapper ──────────────────────────────
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
-  const isAuthenticated = useSyncExternalStore(
-    subscribeToAuth,
-    getAuthSnapshot,
-    getAuthServerSnapshot
-  );
-
-  useEffect(() => {
-    if (hydrated && !isAuthenticated) {
-      router.replace('/login');
-    }
-  }, [hydrated, isAuthenticated, router]);
-
-  // Show loading until auth is verified (prevents flash of dashboard)
-  if (!hydrated || !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="h-6 w-6 border-2 border-accent-plum/30 border-t-accent-plum rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-// ── Dashboard Shell ─────────────────────────────────────
 function DashboardShell() {
-  const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { activePage, setActivePage } = useAppStore();
 
-  // Close mobile menu on resize
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
         setMobileMenuOpen(false);
       }
     };
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (mobileMenuOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
+
     return () => {
       document.body.style.overflow = '';
     };
@@ -117,7 +79,6 @@ function DashboardShell() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar
           activeItem={activePage}
@@ -127,7 +88,6 @@ function DashboardShell() {
         />
       </div>
 
-      {/* Mobile Sidebar Overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
@@ -148,7 +108,6 @@ function DashboardShell() {
         </div>
       )}
 
-      {/* Main content */}
       <div
         className={cn(
           'min-h-screen flex flex-col',
@@ -162,20 +121,13 @@ function DashboardShell() {
         />
 
         <main className="flex-1 p-4 sm:p-6 max-w-[1400px] mx-auto w-full">
-          <div key={activePage}>
-            {renderPage()}
-          </div>
+          <div key={activePage}>{renderPage()}</div>
         </main>
       </div>
     </div>
   );
 }
 
-// ── Main Page (Protected) ───────────────────────────────
 export default function Home() {
-  return (
-    <ProtectedRoute>
-      <DashboardShell />
-    </ProtectedRoute>
-  );
+  return <DashboardShell />;
 }

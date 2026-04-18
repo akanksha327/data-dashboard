@@ -1,31 +1,23 @@
 'use client';
 
-import React, { startTransition, useEffect, useState, useSyncExternalStore } from 'react';
+import React, { startTransition, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Manrope } from 'next/font/google';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import { ArrowRight, BarChart3, Eye, EyeOff, Moon, Sun } from 'lucide-react';
 
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signOut,
+} from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-import {
-  getAuthServerSnapshot,
-  getAuthSnapshot,
-  setAuth,
-  subscribeToAuth,
-} from '@/lib/auth';
 import { useAppStore } from '@/lib/app-store';
 import { cn } from '@/lib/utils';
 
 type AuthView = 'login' | 'signup';
-
-const manrope = Manrope({
-  subsets: ['latin'],
-  display: 'swap',
-});
-
-const subscribeToHydration = () => () => {};
 
 const accentByView: Record<AuthView, string> = {
   login: '#505081',
@@ -37,26 +29,51 @@ const transition = {
   ease: [0.22, 1, 0.36, 1] as const,
 };
 
+function getEmailActionSettings() {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  return {
+    url: `${window.location.origin}/login`,
+    handleCodeInApp: false,
+  };
+}
+
+function getFirebaseAuthErrorMessage(error: unknown) {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+      return 'Invalid email or password.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/too-many-requests':
+      return 'Too many login attempts. Please wait a bit and try again.';
+    case 'auth/network-request-failed':
+      return 'Firebase could not be reached. Check your internet connection and try again.';
+    case 'auth/invalid-api-key':
+    case 'auth/app-deleted':
+    case 'auth/configuration-not-found':
+      return 'Firebase configuration looks incomplete. Please check the frontend environment variables.';
+    default:
+      if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') {
+        return error.message;
+      }
+
+      return 'Authentication failed. Please try again.';
+  }
+}
+
 export default function AuthPage() {
-  const router = useRouter();
   const [view, setView] = useState<AuthView>('login');
   const { initializeTheme, isDarkMode, toggleDarkMode } = useAppStore();
-  const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
-  const isAuthenticated = useSyncExternalStore(
-    subscribeToAuth,
-    getAuthSnapshot,
-    getAuthServerSnapshot
-  );
 
   useEffect(() => {
     initializeTheme();
   }, [initializeTheme]);
-
-  useEffect(() => {
-    if (hydrated && isAuthenticated) {
-      router.replace('/');
-    }
-  }, [hydrated, isAuthenticated, router]);
 
   const accent = accentByView[view];
   const authBackground = isDarkMode
@@ -66,27 +83,16 @@ export default function AuthPage() {
     ? 'linear-gradient(120deg, rgba(255,255,255,0.08), rgba(255,255,255,0))'
     : 'none';
 
-  if (!hydrated || isAuthenticated) {
-    return (
-      <div className={cn(manrope.className, 'grid h-screen w-screen place-items-center overflow-hidden bg-[#F5F7FB] dark:bg-[#141318]')}>
-        <div
-          className="h-9 w-9 rounded-full border-2 border-[#D9D4F6] border-t-transparent animate-spin"
-          style={{ borderRightColor: accent, borderBottomColor: accent }}
-        />
-      </div>
-    );
-  }
-
   return (
     <MotionConfig reducedMotion="user">
       <div
         className={cn(
-          manrope.className,
           'relative flex h-screen w-screen items-center justify-center overflow-hidden text-[#1C1C1C] dark:text-[#E8E6E1] lg:justify-end'
         )}
         style={{
           '--auth-accent': accent,
           background: authBackground,
+          fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         } as React.CSSProperties}
       >
         <button
@@ -242,11 +248,17 @@ function LoginForm({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+  const [showResendVerification, setShowResendVerification] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
+    setInfo('');
+    setShowResendVerification(false);
 
     if (!email.trim()) {
       setError('Enter your email.');
@@ -262,20 +274,92 @@ function LoginForm({
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await userCredential.user.reload();
+      const currentUser = auth.currentUser ?? userCredential.user;
 
       // Block login if email is not verified
-      if (!userCredential.user.emailVerified) {
-        await signOut(auth);
-        setError('Please verify your email before logging in. Check your inbox for the verification link.');
+      if (!currentUser.emailVerified) {
+        try {
+          await sendEmailVerification(currentUser, getEmailActionSettings());
+          setInfo('Your account is not verified yet. We just sent a fresh verification email. Check spam or junk too.');
+        } catch (verificationError) {
+          console.error(verificationError);
+          setError('Your account is not verified yet, and we could not resend the verification email automatically.');
+        } finally {
+          await signOut(auth);
+        }
+        setShowResendVerification(true);
         setLoading(false);
         return;
       }
 
-      // Redirection is handled by AuthProvider
-    } catch (err: any) {
+      localStorage.setItem('user_email', currentUser.email ?? email);
+      router.replace('/');
+    } catch (err: unknown) {
       console.error(err);
-      setError('Invalid email or password.');
+      setError(getFirebaseAuthErrorMessage(err));
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setError('');
+    setInfo('');
+
+    if (!email.trim()) {
+      setError('Enter your email first so we know where to send the verification link.');
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('Enter your password so we can verify the account before resending the email.');
+      return;
+    }
+
+    setResendingVerification(true);
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await userCredential.user.reload();
+      const currentUser = auth.currentUser ?? userCredential.user;
+
+      if (currentUser.emailVerified) {
+        setInfo('This email is already verified. You can log in now.');
+        router.replace('/');
+        return;
+      }
+
+      await sendEmailVerification(currentUser, getEmailActionSettings());
+      setInfo('A new verification email has been sent. Check spam or junk if it does not appear in your inbox.');
+      setShowResendVerification(true);
+      await signOut(auth);
+    } catch (err: unknown) {
+      console.error(err);
+      setError(getFirebaseAuthErrorMessage(err));
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setInfo('');
+
+    if (!email.trim()) {
+      setError('Enter your email first so we can send the password reset link.');
+      return;
+    }
+
+    setSendingReset(true);
+
+    try {
+      await sendPasswordResetEmail(auth, email, getEmailActionSettings());
+      setInfo('Password reset email sent. Check your inbox, spam, and junk folders.');
+    } catch (err: unknown) {
+      console.error(err);
+      setError(getFirebaseAuthErrorMessage(err));
+    } finally {
+      setSendingReset(false);
     }
   };
 
@@ -312,8 +396,13 @@ function LoginForm({
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3 text-xs sm:text-sm">
-        <button type="button" className="text-[#6B6B6B] hover:text-[#374151] dark:text-[#A1A1AA] dark:hover:text-[#E8E6E1]">
-          Forgot password?
+        <button
+          type="button"
+          onClick={handleForgotPassword}
+          disabled={sendingReset}
+          className="text-[#6B6B6B] hover:text-[#374151] disabled:opacity-60 dark:text-[#A1A1AA] dark:hover:text-[#E8E6E1]"
+        >
+          {sendingReset ? 'Sending reset...' : 'Forgot password?'}
         </button>
         <button type="button" onClick={onSwitchToSignup} className="font-medium hover:opacity-80" style={{ color: accent }}>
           Sign up
@@ -321,6 +410,18 @@ function LoginForm({
       </div>
 
       {error ? <p className="mt-4 text-sm font-medium text-[#B45376]">{error}</p> : null}
+      {info ? <p className="mt-4 text-sm font-medium text-[#2D8659]">{info}</p> : null}
+
+      {showResendVerification ? (
+        <button
+          type="button"
+          onClick={handleResendVerification}
+          disabled={resendingVerification}
+          className="mt-4 inline-flex items-center text-sm font-medium text-[#505081] hover:opacity-80 disabled:opacity-60"
+        >
+          {resendingVerification ? 'Resending verification email...' : 'Resend verification email'}
+        </button>
+      ) : null}
 
       <div className="mt-6">
         <SubmitButton accent={accent} loading={loading} label="Log in" loadingLabel="Signing in" />
@@ -336,7 +437,6 @@ function SignupForm({
   accent: string;
   onSwitchToLogin: () => void;
 }) {
-  const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -380,24 +480,23 @@ function SignupForm({
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       localStorage.setItem('user_name', name);
+      localStorage.setItem('user_email', userCredential.user.email ?? email);
 
       // Send verification email
-      await sendEmailVerification(userCredential.user);
+      await sendEmailVerification(userCredential.user, getEmailActionSettings());
 
       // Sign out immediately so unverified user can't access the app
       await signOut(auth);
 
-      setSuccess('Account created! Check your email for a verification link, then log in.');
+      setSuccess('Account created. We sent a verification email just now. If you do not see it, try logging in and use "Resend verification email".');
       setLoading(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      const code = err?.code || '';
+      const code = typeof err === 'object' && err && 'code' in err ? String(err.code) : '';
       if (code === 'auth/email-already-in-use') {
         setError('An account with this email already exists.');
-      } else if (code === 'auth/invalid-email') {
-        setError('Please enter a valid email address.');
       } else {
-        setError(err.message || 'Failed to create account.');
+        setError(getFirebaseAuthErrorMessage(err));
       }
       setLoading(false);
     }

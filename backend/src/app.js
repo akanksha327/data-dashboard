@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const uploadRoutes = require('./routes/upload.routes');
 const queryRoutes = require('./routes/query.routes');
+const dbRoutes = require('./routes/db.routes');
 const { FRONTEND_ORIGIN } = require('./config');
 
 function createApp() {
@@ -16,7 +17,7 @@ function createApp() {
       message: 'Data Dashboard backend is running',
       service: 'data-dashboard-backend',
       frontendOrigin: FRONTEND_ORIGIN,
-      routes: ['/health', '/upload', '/query'],
+      routes: ['/health', '/upload', '/query', '/db/ping'],
     });
   });
 
@@ -30,6 +31,7 @@ function createApp() {
 
   app.use('/upload', uploadRoutes);
   app.use('/query', queryRoutes);
+  app.use('/db', dbRoutes);
 
   app.use((err, _req, res, _next) => {
     console.error(err);

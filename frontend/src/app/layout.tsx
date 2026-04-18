@@ -1,13 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "../../styles/globals.css";
 import { Toaster } from "@/components/ui/toaster";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
+import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
   title: "AI Data Analyst Dashboard",
@@ -16,9 +10,6 @@ export const metadata: Metadata = {
     icon: "/logo.svg",
   },
 };
-
-import { AuthProvider } from "@/components/auth-provider";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +18,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} antialiased bg-background text-foreground`}
+        className="antialiased bg-background text-foreground"
+        style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}
       >
         <AuthProvider>
           {children}

@@ -1,50 +1,93 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import React, { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { setAuth, removeAuth } from '@/lib/auth';
+import { removeAuth, setAuth } from '@/lib/auth';
+
+type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+const PUBLIC_PATHS = new Set(['/login', '/comments']);
+
+function isPublicPath(pathname: string | null) {
+  return pathname ? PUBLIC_PATHS.has(pathname) : false;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const [status, setStatus] = useState<AuthStatus>('loading');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Block unverified users — sign them out and send to login
-        if (!user.emailVerified) {
-          await signOut(auth);
-          removeAuth();
-          if (pathname !== '/login') {
-            router.push('/login');
+        let currentUser = auth.currentUser ?? user;
+
+        if (!currentUser.emailVerified) {
+          try {
+            await currentUser.reload();
+          } catch (error) {
+            console.error('Failed to refresh Firebase auth state', error);
           }
-          setLoading(false);
+
+          currentUser = auth.currentUser ?? currentUser;
+        }
+
+        if (!currentUser.emailVerified) {
+          if (isPublicPath(pathname)) {
+            removeAuth();
+            setStatus('unauthenticated');
+          } else {
+            try {
+              await signOut(auth);
+            } finally {
+              removeAuth();
+              setStatus('unauthenticated');
+            }
+          }
           return;
         }
 
-        // Verified user — sync local state
         setAuth();
-        if (pathname === '/login') {
-          router.push('/');
-        }
-      } else {
-        // No user — clear auth and redirect to login
-        removeAuth();
-        if (pathname !== '/login') {
-          router.push('/login');
-        }
+        setStatus('authenticated');
+        return;
       }
-      setLoading(false);
+
+      removeAuth();
+      setStatus('unauthenticated');
     });
 
     return () => unsubscribe();
-  }, [pathname, router]);
+  }, [pathname]);
 
-  // Show loading state while Firebase checks auth
-  if (loading) {
+  useEffect(() => {
+    if (status === 'loading') {
+      return;
+    }
+
+    if (status === 'authenticated' && pathname === '/login') {
+      router.replace('/');
+      return;
+    }
+
+    if (status === 'unauthenticated' && !isPublicPath(pathname)) {
+      router.replace('/login');
+    }
+  }, [pathname, router, status]);
+
+  const shouldBlockRender = useMemo(() => {
+    if (status === 'loading') {
+      return true;
+    }
+
+    if (status === 'authenticated') {
+      return pathname === '/login';
+    }
+
+    return !isPublicPath(pathname);
+  }, [pathname, status]);
+
+  if (shouldBlockRender) {
     return (
       <div className="grid h-screen w-screen place-items-center bg-[#F5F7FB] dark:bg-[#141318]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />

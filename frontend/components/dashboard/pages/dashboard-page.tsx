@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import { useMemo, type ElementType } from 'react';
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -111,6 +111,8 @@ export function DashboardPage() {
     ];
   }, [dataLoaded, lineData]);
 
+  const visibleDataPoints = mainChartData.length;
+
   const stats = [
     {
       label: 'Total Rows',
@@ -142,7 +144,7 @@ export function DashboardPage() {
     },
   ];
 
-  const activityIconMap: Record<string, { color: string; bg: string; icon: React.ElementType }> = {
+  const activityIconMap: Record<string, { color: string; bg: string; icon: ElementType }> = {
     upload: { color: 'text-accent-purple', bg: 'bg-accent-purple-soft', icon: Upload },
     query: { color: 'text-accent-purple', bg: 'bg-accent-purple-soft', icon: MessageSquareText },
     insight: { color: 'text-accent-slate', bg: 'bg-accent-slate-light', icon: TrendingUp },
@@ -151,39 +153,39 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
             <div
               key={stat.label}
-              className="group rounded-xl border border-border bg-card px-4 py-3.5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-default"
+              className="group cursor-default rounded-xl border border-border bg-card px-4 py-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
-              <div className="flex items-center gap-2 mb-2">
+              <div className="mb-2 flex items-center gap-2">
                 <div className={cn('flex h-7 w-7 items-center justify-center rounded-lg', stat.bg)}>
                   <Icon className={cn('h-3.5 w-3.5', stat.color)} />
                 </div>
-                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                   {stat.label}
                 </span>
               </div>
-              <p className="text-lg font-bold text-foreground leading-none">{stat.value}</p>
+              <p className="text-lg font-bold leading-none text-foreground">{stat.value}</p>
             </div>
           );
         })}
       </div>
 
       {!dataLoaded && (
-        <div className="rounded-xl border-2 border-dashed border-border bg-card px-5 py-8 flex flex-col items-center justify-center text-center transition-all duration-200 hover:border-accent-purple/50 hover:shadow-md">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-purple-soft mb-3">
+        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-card px-5 py-8 text-center transition-all duration-200 hover:border-accent-purple/50 hover:shadow-md">
+          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent-purple-soft">
             <Upload className="h-5 w-5 text-accent-purple" />
           </div>
           <p className="text-sm font-medium text-foreground">Upload a CSV file to get started</p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="mt-1 text-xs text-muted-foreground">
             The frontend and backend now run separately, so uploads go through the dedicated API-backed upload page.
           </p>
           <Button
-            className="mt-4 rounded-xl bg-accent-purple hover:bg-accent-purple-hover text-white"
+            className="mt-4 rounded-xl bg-accent-purple text-white hover:bg-accent-purple-hover"
             onClick={() => setActivePage('upload')}
           >
             Open Upload Page
@@ -192,23 +194,23 @@ export function DashboardPage() {
       )}
 
       {dataLoaded && (
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
-          <Card className="lg:col-span-7 border-0 shadow-sm group hover:shadow-md transition-shadow duration-300">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-10">
+          <Card className="group border-0 shadow-sm transition-shadow duration-300 hover:shadow-md lg:col-span-7">
             <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">{mainColumn} Trend</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {lineData.length} data points from {uploadedFile?.name || 'dataset'}
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {visibleDataPoints} data points from {uploadedFile?.name || 'dataset'}
                   </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs text-muted-foreground hover:text-foreground h-7 px-2"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                   onClick={() => setActivePage('visualizations')}
                 >
-                  View all <ChevronRight className="h-3 w-3 ml-0.5" />
+                  View all <ChevronRight className="ml-0.5 h-3 w-3" />
                 </Button>
               </div>
               <ChartContainer config={mainChartConfig} className="h-[260px] w-full">
@@ -261,35 +263,35 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
-          <div className="lg:col-span-3 flex flex-col gap-3">
-            <div className="rounded-xl border border-border bg-card px-4 py-4 flex-1 group hover:shadow-md transition-all duration-200">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+          <div className="flex flex-col gap-3 lg:col-span-3">
+            <div className="group flex-1 rounded-xl border border-border bg-card px-4 py-4 transition-all duration-200 hover:shadow-md">
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Current File
               </p>
               <div className="flex items-center gap-2">
-                <FileSpreadsheet className="h-4 w-4 text-accent-purple shrink-0" />
-                <p className="text-sm font-semibold text-foreground truncate">{uploadedFile?.name}</p>
+                <FileSpreadsheet className="h-4 w-4 shrink-0 text-accent-purple" />
+                <p className="truncate text-sm font-semibold text-foreground">{uploadedFile?.name}</p>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {uploadedFile?.rows.toLocaleString()} rows x {uploadedFile?.columns} cols · {uploadedFile?.size}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {uploadedFile?.rows.toLocaleString()} rows x {uploadedFile?.columns} cols - {uploadedFile?.size}
               </p>
             </div>
 
-            <div className="rounded-xl border border-border bg-card px-4 py-4 flex-1 group hover:shadow-md transition-all duration-200">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <div className="group flex-1 rounded-xl border border-border bg-card px-4 py-4 transition-all duration-200 hover:shadow-md">
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Top Value
               </p>
-              <p className="text-2xl font-bold text-foreground leading-none">{topCategory}</p>
-              <p className="text-xs text-muted-foreground mt-1.5">Highest visible category in the dataset</p>
+              <p className="text-2xl font-bold leading-none text-foreground">{topCategory}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">Highest visible category in the dataset</p>
               {growthMetric && (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-0.5 text-[11px] font-medium mt-2 px-1.5 py-0.5 rounded-md',
+                    'mt-2 inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium',
                     growthMetric.startsWith('+')
-                      ? 'text-accent-purple bg-accent-purple-soft'
+                      ? 'bg-accent-purple-soft text-accent-purple'
                       : growthMetric.startsWith('-')
-                        ? 'text-accent-red bg-accent-red-light'
-                        : 'text-muted-foreground bg-muted'
+                        ? 'bg-accent-red-light text-accent-red'
+                        : 'bg-muted text-muted-foreground'
                   )}
                 >
                   {growthMetric.startsWith('+') && <ArrowUpRight className="h-3 w-3" />}
@@ -299,18 +301,18 @@ export function DashboardPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-border bg-card px-4 py-4 flex-1 group hover:shadow-md transition-all duration-200">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <div className="group flex-1 rounded-xl border border-border bg-card px-4 py-4 transition-all duration-200 hover:shadow-md">
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Queries Run
               </p>
-              <p className="text-2xl font-bold text-foreground leading-none">{totalQueries}</p>
-              <p className="text-xs text-muted-foreground mt-1.5">
+              <p className="text-2xl font-bold leading-none text-foreground">{totalQueries}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">
                 {totalQueries === 0 ? 'No backend queries yet' : 'Total queries in this session'}
               </p>
             </div>
 
-            <div className="rounded-xl border border-border bg-card px-4 py-4 group hover:shadow-md transition-all duration-200">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <div className="group rounded-xl border border-border bg-card px-4 py-4 transition-all duration-200 hover:shadow-md">
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Activity Score
               </p>
               <ChartContainer config={{ v: { label: 'Activity', color: '#6B6BA8' } }} className="h-[60px] w-full">
@@ -344,9 +346,9 @@ export function DashboardPage() {
       )}
 
       {dataLoaded && (
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
-          <div className="lg:col-span-6 rounded-xl border border-border bg-card px-4 py-4 group hover:shadow-md transition-shadow duration-300">
-            <div className="flex items-center justify-between mb-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-10">
+          <div className="group rounded-xl border border-border bg-card px-4 py-4 transition-shadow duration-300 hover:shadow-md lg:col-span-6">
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Recent Activity</h3>
               <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
@@ -370,8 +372,8 @@ export function DashboardPage() {
                       <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', style.bg)}>
                         <Icon className={cn('h-3.5 w-3.5', style.color)} />
                       </div>
-                      <p className="text-xs text-foreground flex-1 truncate">{item.description}</p>
-                      <span className="text-[11px] text-muted-foreground shrink-0">{item.timestamp}</span>
+                      <p className="flex-1 truncate text-xs text-foreground">{item.description}</p>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{item.timestamp}</span>
                     </div>
                   );
                 })}
@@ -380,14 +382,14 @@ export function DashboardPage() {
           </div>
 
           <div className="lg:col-span-4">
-            <div className="rounded-xl border border-border bg-card px-4 py-4 group hover:shadow-md transition-shadow duration-300">
-              <h3 className="text-sm font-semibold text-foreground mb-2.5">Columns</h3>
+            <div className="group rounded-xl border border-border bg-card px-4 py-4 transition-shadow duration-300 hover:shadow-md">
+              <h3 className="mb-2.5 text-sm font-semibold text-foreground">Columns</h3>
               <div className="flex flex-wrap gap-1.5">
                 {csvHeaders.slice(0, 8).map((header) => (
                   <span
                     key={header.name}
                     className={cn(
-                      'inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-md',
+                      'inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium',
                       header.type === 'number'
                         ? 'bg-accent-purple-soft text-accent-purple'
                         : 'bg-muted text-muted-foreground'
@@ -397,7 +399,7 @@ export function DashboardPage() {
                   </span>
                 ))}
                 {csvHeaders.length > 8 && (
-                  <span className="text-[11px] text-muted-foreground px-2 py-0.5">
+                  <span className="px-2 py-0.5 text-[11px] text-muted-foreground">
                     +{csvHeaders.length - 8} more
                   </span>
                 )}

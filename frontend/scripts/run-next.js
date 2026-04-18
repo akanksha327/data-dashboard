@@ -86,6 +86,12 @@ async function main() {
     commandArgs.push('--port', String(port));
   }
 
+  if (command === 'dev') {
+    // Turbopack is currently serving globals.css as unparsable in local dev,
+    // so force webpack for the stable styled dashboard experience.
+    commandArgs.push('--webpack');
+  }
+
   commandArgs.push(...process.argv.slice(3));
   const child = spawn(
     process.execPath,
